@@ -124,9 +124,9 @@ def main(_argv):
             for y in range(split_parts-1):
                 print(a[y])
                 print(a[y+1])
-             b=np.allclose(a[y],a[y+1],rtol,atol)
-            if b==True:
-                total=total+1
+                b=np.allclose(a[y],a[y+1],rtol,atol)
+                if b==True:
+                    total=total+1
             if total>7:
                 print("vehicle is stopped")
 
