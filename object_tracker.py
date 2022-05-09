@@ -43,7 +43,7 @@ def main(_argv):
     max_cosine_distance = 0.4
     nn_budget = None
     nms_max_overlap = 1.0
-    
+    new_list=[]
     # initialize deep sort
     model_filename = 'model_data/mars-small128.pb'
     encoder = gdet.create_box_encoder(model_filename, batch_size=1)
@@ -99,6 +99,37 @@ def main(_argv):
             image = Image.fromarray(frame)
         else:
             print('Video has ended or failed, try a different video format!')
+            if not new_list:
+              new_list.append(int(bbox[0]))
+              new_list.append(int(bbox[1]))
+              new_list.append(int(bbox[2]))
+              new_list.append(int(bbox[3]))
+              array = np.array(new_list)
+            else:
+              new_list.clear()
+              new_list.append(int(bbox[0]))
+              new_list.append(int(bbox[1]))
+              new_list.append(int(bbox[2]))
+              new_list.append(int(bbox[3]))
+              array=np.append(array,new_list)
+            print("array",array)
+            for x in array:
+               count=count+1
+            split_parts=int(count/4)
+            a=np.split(array, split_parts) 
+            print(a) 
+            rtol=0.005524
+            atol=1
+            total=0
+            for y in range(split_parts-1):
+                print(a[y])
+                print(a[y+1])
+             b=np.allclose(a[y],a[y+1],rtol,atol)
+            if b==True:
+                total=total+1
+            if total>7:
+                print("vehicle is stopped")
+
             break
         frame_num +=1
         print('Frame #: ', frame_num)
@@ -157,10 +188,10 @@ def main(_argv):
         class_names = utils.read_class_names(cfg.YOLO.CLASSES)
 
         # by default allow all classes in .names file
-        allowed_classes = list(class_names.values())
+        #allowed_classes = list(class_names.values())
         
         # custom allowed classes (uncomment line below to customize tracker for only people)
-        #allowed_classes = ['person']
+        allowed_classes = ['Car','Lorry']
 
         # loop through objects and use class index to get class name, allow only classes in allowed_classes list
         names = []
@@ -230,8 +261,8 @@ def main(_argv):
         # if output flag is set, save video file
         if FLAGS.output:
             out.write(result)
-        if cv2.waitKey(1) & 0xFF == ord('q'): break
-    cv2.destroyAllWindows()
+        if 0xFF == ord('q'): break
+    
 
 if __name__ == '__main__':
     try:
