@@ -43,7 +43,7 @@ def main(_argv):
     max_cosine_distance = 0.4
     nn_budget = None
     nms_max_overlap = 1.0
-    
+    new_list=[]
     # initialize deep sort
     model_filename = 'model_data/mars-small128.pb'
     encoder = gdet.create_box_encoder(model_filename, batch_size=1)
@@ -99,6 +99,20 @@ def main(_argv):
             image = Image.fromarray(frame)
         else:
             print('Video has ended or failed, try a different video format!')
+            for x in array:
+                total_number=total_number+1
+            count=total_number
+            split_parts=int(count/4)
+            a=np.split(array, split_parts) 
+            rtol=0.005524
+            atol=1
+            total=0
+            for y in range(split_parts-1):
+                  b=np.allclose(a[y],a[y+1],rtol,atol)
+                  if b==True:
+                     total=total+1
+                     if len>500:
+                        print("vehicle is stopped")
             break
         frame_num +=1
         print('Frame #: ', frame_num)
@@ -157,10 +171,10 @@ def main(_argv):
         class_names = utils.read_class_names(cfg.YOLO.CLASSES)
 
         # by default allow all classes in .names file
-        allowed_classes = list(class_names.values())
+        #allowed_classes = list(class_names.values())
         
         # custom allowed classes (uncomment line below to customize tracker for only people)
-        #allowed_classes = ['person']
+        allowed_classes = ['car','Lorry']
 
         # loop through objects and use class index to get class name, allow only classes in allowed_classes list
         names = []
@@ -213,7 +227,19 @@ def main(_argv):
             cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), color, 2)
             cv2.rectangle(frame, (int(bbox[0]), int(bbox[1]-30)), (int(bbox[0])+(len(class_name)+len(str(track.track_id)))*17, int(bbox[1])), color, -1)
             cv2.putText(frame, class_name + "-" + str(track.track_id),(int(bbox[0]), int(bbox[1]-10)),0, 0.75, (255,255,255),2)
-
+            if not new_list:
+              new_list.append(int(bbox[0]))
+              new_list.append(int(bbox[1]))
+              new_list.append(int(bbox[2]))
+              new_list.append(int(bbox[3]))
+              array = np.array(new_list)
+            else:
+              new_list.clear()
+              new_list.append(int(bbox[0]))
+              new_list.append(int(bbox[1]))
+              new_list.append(int(bbox[2]))
+              new_list.append(int(bbox[3]))
+              array=np.append(array,new_list)
         # if enable info flag then print details about each track
             if FLAGS.info:
                 print("Tracker ID: {}, Class: {},  BBox Coords (xmin, ymin, xmax, ymax): {}".format(str(track.track_id), class_name, (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))))
