@@ -113,7 +113,7 @@ def main(_argv):
                      total=total+1
                      if len>500:
                         print("vehicle is stopped")
-            break
+            break;
         frame_num +=1
         print('Frame #: ', frame_num)
         frame_size = frame.shape[:2]
@@ -256,9 +256,9 @@ def main(_argv):
         # if output flag is set, save video file
         if FLAGS.output:
             out.write(result)
-        if cv2.waitKey(1) & 0xFF == ord('q'): break
-    cv2.destroyAllWindows()
-
+        if 0xFF == ord('q'): break
+  
+  
 if __name__ == '__main__':
     try:
         app.run(main)
