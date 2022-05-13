@@ -35,7 +35,7 @@ flags.DEFINE_string('output_format', 'XVID', 'codec used in VideoWriter when sav
 flags.DEFINE_float('iou', 0.45, 'iou threshold')
 flags.DEFINE_float('score', 0.50, 'score threshold')
 flags.DEFINE_boolean('dont_show', False, 'dont show video output')
-flags.DEFINE_boolean('info', False, 'show detailed info of tracked objects')
+flags.DEFINE_boolean('info', True, 'show detailed info of tracked objects')
 flags.DEFINE_boolean('count', False, 'count objects being tracked on screen')
 
 def main(_argv):
