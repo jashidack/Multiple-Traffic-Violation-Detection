@@ -24,7 +24,7 @@ from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 from tools import generate_detections as gdet
 flags.DEFINE_string('framework', 'tf', '(tf, tflite, trt')
-flags.DEFINE_string('weights', './checkpoints/yolov4-416',
+flags.DEFINE_string('weights', '/content/drive/MyDrive/MainProject/checkpoints/yolov4-416',
                     'path to weights file')
 flags.DEFINE_integer('size', 416, 'resize images to')
 flags.DEFINE_boolean('tiny', False, 'yolo or yolo-tiny')
@@ -113,7 +113,7 @@ def main(_argv):
                      total=total+1
                      if len>500:
                         print("vehicle is stopped")
-            break;
+            break
         frame_num +=1
         print('Frame #: ', frame_num)
         frame_size = frame.shape[:2]
