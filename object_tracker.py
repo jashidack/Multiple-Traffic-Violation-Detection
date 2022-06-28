@@ -24,7 +24,7 @@ from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 from tools import generate_detections as gdet
 flags.DEFINE_string('framework', 'tf', '(tf, tflite, trt')
-flags.DEFINE_string('weights', '/content/drive/MyDrive/MainProject/checkpoints/yolov4-416',
+flags.DEFINE_string('weights', './checkpoints/yolov4-416',
                     'path to weights file')
 flags.DEFINE_integer('size', 416, 'resize images to')
 flags.DEFINE_boolean('tiny', False, 'yolo or yolo-tiny')
@@ -35,23 +35,40 @@ flags.DEFINE_string('output_format', 'XVID', 'codec used in VideoWriter when sav
 flags.DEFINE_float('iou', 0.45, 'iou threshold')
 flags.DEFINE_float('score', 0.50, 'score threshold')
 flags.DEFINE_boolean('dont_show', False, 'dont show video output')
-flags.DEFINE_boolean('info', True, 'show detailed info of tracked objects')
+flags.DEFINE_boolean('info', False, 'show detailed info of tracked objects')
 flags.DEFINE_boolean('count', False, 'count objects being tracked on screen')
+# Python code to find the maximum value
+def maximum(k,max):
+  for i in k:
+      if int(i)>max:
+          max=int(i)
+  return max
+#Python code to convert the coordinates into center and width coordinates
+def box_corner_to_center(boxes):
+    """Convert from (upper-left, lower-right) to (center, width, height)."""
+    x1, y1, x2, y2 = int(bbox[0]),int(bbox[1]),int(bbox[2]),int(bbox[3])
+    cx = (x1 + x2) / 2
+    cy = (y1 + y2) / 2
+    w = x2 - x1
+    h = y2 - y1
+    boxes = np.stack((cx, cy, w, h), axis=-1)
+    return boxes
+
+# Python code to merge dict using update() method
+def Merge(dict1, dict2):
+    return(dict2.update(dict1))
 
 def main(_argv):
     # Definition of the parameters
     max_cosine_distance = 0.4
     nn_budget = None
     nms_max_overlap = 1.0
-    new_list=[]
-    # initialize deep sort
     model_filename = 'model_data/mars-small128.pb'
     encoder = gdet.create_box_encoder(model_filename, batch_size=1)
     # calculate cosine distance metric
     metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
     # initialize tracker
     tracker = Tracker(metric)
-
     # load configuration for object detector
     config = ConfigProto()
     config.gpu_options.allow_growth = True
@@ -59,7 +76,11 @@ def main(_argv):
     STRIDES, ANCHORS, NUM_CLASS, XYSCALE = utils.load_config(FLAGS)
     input_size = FLAGS.size
     video_path = FLAGS.video
-
+    true_list=[]
+    tot_count=0
+    ref_list = []
+    lst_count=0
+    dict1={}
     # load tflite model if flag is set
     if FLAGS.framework == 'tflite':
         interpreter = tf.lite.Interpreter(model_path=FLAGS.weights)
@@ -99,20 +120,6 @@ def main(_argv):
             image = Image.fromarray(frame)
         else:
             print('Video has ended or failed, try a different video format!')
-            for x in array:
-                total_number=total_number+1
-            count=total_number
-            split_parts=int(count/4)
-            a=np.split(array, split_parts) 
-            rtol=0.005524
-            atol=1
-            total=0
-            for y in range(split_parts-1):
-                  b=np.allclose(a[y],a[y+1],rtol,atol)
-                  if b==True:
-                     total=total+1
-                     if len>500:
-                        print("vehicle is stopped")
             break
         frame_num +=1
         print('Frame #: ', frame_num)
@@ -121,7 +128,7 @@ def main(_argv):
         image_data = image_data / 255.
         image_data = image_data[np.newaxis, ...].astype(np.float32)
         start_time = time.time()
-
+        total_number=0
         # run detections on tflite if flag is set
         if FLAGS.framework == 'tflite':
             interpreter.set_tensor(input_details[0]['index'], image_data)
@@ -169,12 +176,13 @@ def main(_argv):
 
         # read in all class names from config
         class_names = utils.read_class_names(cfg.YOLO.CLASSES)
+        
 
         # by default allow all classes in .names file
         #allowed_classes = list(class_names.values())
         
         # custom allowed classes (uncomment line below to customize tracker for only people)
-        allowed_classes = ['car','Lorry']
+        allowed_classes = ['car','truck','motorbike','bicycle','bus']
 
         # loop through objects and use class index to get class name, allow only classes in allowed_classes list
         names = []
@@ -213,54 +221,137 @@ def main(_argv):
         # Call the tracker
         tracker.predict()
         tracker.update(detections)
-
+        repeat_time=0
         # update tracks
+        total_number=0
+        repeat_time = 0
+        Dict={}
+
+
         for track in tracker.tracks:
+
             if not track.is_confirmed() or track.time_since_update > 1:
-                continue 
+                continue
             bbox = track.to_tlbr()
             class_name = track.get_class()
-            
+
         # draw bbox on screen
             color = colors[int(track.track_id) % len(colors)]
             color = [i * 255 for i in color]
             cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), color, 2)
             cv2.rectangle(frame, (int(bbox[0]), int(bbox[1]-30)), (int(bbox[0])+(len(class_name)+len(str(track.track_id)))*17, int(bbox[1])), color, -1)
             cv2.putText(frame, class_name + "-" + str(track.track_id),(int(bbox[0]), int(bbox[1]-10)),0, 0.75, (255,255,255),2)
-            if not new_list:
-              new_list.append(int(bbox[0]))
-              new_list.append(int(bbox[1]))
-              new_list.append(int(bbox[2]))
-              new_list.append(int(bbox[3]))
-              array = np.array(new_list)
-            else:
-              new_list.clear()
-              new_list.append(int(bbox[0]))
-              new_list.append(int(bbox[1]))
-              new_list.append(int(bbox[2]))
-              new_list.append(int(bbox[3]))
-              array=np.append(array,new_list)
-        # if enable info flag then print details about each track
+            rtol = 0.081
+            atol = 1
+            width=int(bbox[2])-int(bbox[0])
+            height=int(bb0x[3])-int(bbox[1])
+            trackid = str(track.track_id)
+            # if enable info flag then print details about each track
             if FLAGS.info:
-                print("Tracker ID: {}, Class: {},  BBox Coords (xmin, ymin, xmax, ymax): {}".format(str(track.track_id), class_name, (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))))
+                print("Tracker ID: {}, Class: {},  BBox Coords (xmin, ymin, xmax, ymax): {}".format(str(track.track_id),class_name, (int(bbox[0]), int(bbox[1]),int(bbox[2]),int(bbox[3]))))
+            #To check if the vehicle is stopped or not
+            b=str(track.track_id)
+            if not Dict:
+                    Dict = dict({b: [class_name,[int(bbox[0]),int(bbox[1]),int(bbox[2]),int(bbox[3])]]},width,height)
+            else:
+                    Dict[b] = [class_name,[int(bbox[0]),int(bbox[1]),int(bbox[2]),int(bbox[3])],width,height]
 
+        print(Dict)
+        reqd_dict=Dict
+        reqd_dict_sort = sorted(reqd_dict.items())
+        sorted_dict = dict(reqd_dict_sort)
+        print("sorted Dict{}".format(sorted_dict))
+        if Dict!={}:
+            try:
+                dict1=dup_dict
+            except:
+                print("No dup dict")
+            dup_dict=Dict
+            Merge(dict1,dup_dict)
+            print("merged{}".format(dup_dict))
+            sort = sorted(dup_dict.items())
+            new_dict = dict(sort)
+            print("new dup dict{}".format(new_dict))
+            ref_array=np.array([])
+            if len(Dict)>0:
+                lst_count=lst_count+1
+            k=maximum(new_dict,0)
+            for i in range(k):
+                key_to_lookup = str(i + 1)
+                if key_to_lookup in new_dict:
+                    if len(ref_array) == 0:
+                        ref_array = np.array(new_dict[key_to_lookup][1])
+                    else:
+                        ref_array = np.append(ref_array, new_dict[key_to_lookup][1])
+
+                else:
+                    random_array = np.random.randint(10, size=(4))
+                    ref_array = np.append(ref_array, random_array)
+
+            print("Reference_array{}".format(ref_array))
+            for x in ref_array:
+                total_number = total_number + 1
+            count=total_number
+            split_parts=int(count/4)
+            a = np.split(ref_array, split_parts)
+
+        try:
+            if lst_count>1:
+                for y in sorted_dict:
+                    k=str(y)
+                    m=int(y)-1
+                    coord = np.array(sorted_dict[k][1])
+                    print("coord {}".format(coord))
+                    print("a[m] {}".format(a[m]))
+                    compare = np.allclose(a[m], coord, rtol, atol)
+                    print(compare)
+                    if compare == True:
+                        true_count = 0
+                        true_count = true_count + 1
+                        if not true_list:
+                            true_list.append(true_count)
+                        else:
+                            try:
+                                if true_list[m]:
+                                    true_list[m] = true_list[m] + true_count
+                            except:
+                                true_list.append(true_count)
+
+                        if true_list[m] > 100:
+                            vehicle_name=sorted_dict[k][0]
+                            trackid = int(k)
+                            box0 = sorted_dict[k][1][0]
+                            box1 = sorted_dict[k][1][1]
+
+                            print("Track_id {} is stopped".format(int(k)))
+                            cv2.putText(frame, vehicle_name + "  is stopped " , (int(box0), int(box1 - 30)), 0, 0.75, (255, 255, 255), 2)
+                    print("true_list{}".format(true_list))
+
+
+
+        except:
+            print("No object is tracked till now")
         # calculate frames per second of running detections
         fps = 1.0 / (time.time() - start_time)
         print("FPS: %.2f" % fps)
         result = np.asarray(frame)
         result = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         
-        if not FLAGS.dont_show:
-            cv2.imshow("Output Video", result)
+
         
         # if output flag is set, save video file
         if FLAGS.output:
             out.write(result)
         if 0xFF == ord('q'): break
+
   
-  
+
 if __name__ == '__main__':
     try:
         app.run(main)
     except SystemExit:
         pass
+
+
+
+
