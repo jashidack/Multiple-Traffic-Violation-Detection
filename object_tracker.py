@@ -1,3 +1,9 @@
+# The allowed time for parking vehicle is taken as 30 seconds here.
+#Some modification still need to be made. In the case of one way traffic violation, The stopped vehicle in the right direction also detected as a rule violated vehicle. So the measurement of centroid value should be considered in the case of traffic violation(Since the centroid of the stopped vehicle does not chnage much).
+#This is applicable for short duration videos as the given tolerance range is not suitable for long duration videos.
+#Future scope: This method will be suitable for long duration videos if the tolerance range can change automatically.
+               # More traffic violation can be detected using a a single system.
+               # The involvement of centroid valuefor detecting one way traffic violation will make the system effective.
 import os
 # comment out below line to enable tensorflow logging outputs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -37,6 +43,8 @@ flags.DEFINE_float('score', 0.50, 'score threshold')
 flags.DEFINE_boolean('dont_show', False, 'dont show video output')
 flags.DEFINE_boolean('info', False, 'show detailed info of tracked objects')
 flags.DEFINE_boolean('count', False, 'count objects being tracked on screen')
+flags.DEFINE_boolean('One_way_traffic', True, 'check one way traffic violation')
+flags.DEFINE_boolean('Stop_checking', True, 'check the stopping of vehicle')
 # Python code to find the maximum value
 def maximum(k,max):
   for i in k:
@@ -57,6 +65,10 @@ def box_corner_to_center(boxes):
 # Python code to merge dict using update() method
 def Merge(dict1, dict2):
     return(dict2.update(dict1))
+
+
+
+
 
 def main(_argv):
     # Definition of the parameters
@@ -81,6 +93,12 @@ def main(_argv):
     ref_list = []
     lst_count=0
     dict1={}
+    Negative_route_id = []
+    Positive_route_id = []
+
+
+
+
     # load tflite model if flag is set
     if FLAGS.framework == 'tflite':
         interpreter = tf.lite.Interpreter(model_path=FLAGS.weights)
@@ -227,7 +245,6 @@ def main(_argv):
         repeat_time = 0
         Dict={}
 
-
         for track in tracker.tracks:
 
             if not track.is_confirmed() or track.time_since_update > 1:
@@ -244,15 +261,17 @@ def main(_argv):
             rtol = 0.081
             atol = 1
             width=int(bbox[2])-int(bbox[0])
-            height=int(bb0x[3])-int(bbox[1])
+            height=int(bbox[3])-int(bbox[1])
             trackid = str(track.track_id)
+            centroid = (int(bbox[0]) + int(bbox[2])) // 2, (int(bbox[1]) + int(bbox[3])) // 2
+            print("centroid{}".format(centroid))
             # if enable info flag then print details about each track
             if FLAGS.info:
                 print("Tracker ID: {}, Class: {},  BBox Coords (xmin, ymin, xmax, ymax): {}".format(str(track.track_id),class_name, (int(bbox[0]), int(bbox[1]),int(bbox[2]),int(bbox[3]))))
             #To check if the vehicle is stopped or not
             b=str(track.track_id)
             if not Dict:
-                    Dict = dict({b: [class_name,[int(bbox[0]),int(bbox[1]),int(bbox[2]),int(bbox[3])]]},width,height)
+                    Dict = dict({b: [class_name,[int(bbox[0]),int(bbox[1]),int(bbox[2]),int(bbox[3])],width,height]})
             else:
                     Dict[b] = [class_name,[int(bbox[0]),int(bbox[1]),int(bbox[2]),int(bbox[3])],width,height]
 
@@ -260,7 +279,6 @@ def main(_argv):
         reqd_dict=Dict
         reqd_dict_sort = sorted(reqd_dict.items())
         sorted_dict = dict(reqd_dict_sort)
-        print("sorted Dict{}".format(sorted_dict))
         if Dict!={}:
             try:
                 dict1=dup_dict
@@ -268,10 +286,8 @@ def main(_argv):
                 print("No dup dict")
             dup_dict=Dict
             Merge(dict1,dup_dict)
-            print("merged{}".format(dup_dict))
             sort = sorted(dup_dict.items())
             new_dict = dict(sort)
-            print("new dup dict{}".format(new_dict))
             ref_array=np.array([])
             if len(Dict)>0:
                 lst_count=lst_count+1
@@ -300,10 +316,19 @@ def main(_argv):
                 for y in sorted_dict:
                     k=str(y)
                     m=int(y)-1
-                    coord = np.array(sorted_dict[k][1])
-                    print("coord {}".format(coord))
+                    vehicle_name = sorted_dict[k][0]
+                    trackid = int(k)
+                    box0 = sorted_dict[k][1][0]
+                    box1 = sorted_dict[k][1][1]
+                    first_width=int(new_dict[k][2])
+                    changed_width=int(sorted_dict[k][2])
+                    first_height=int(new_dict[k][3])
+                    changed_height=int(sorted_dict[k][3])
+                    # Vehicle stop checking
+                    second_array = np.array(sorted_dict[k][1])
                     print("a[m] {}".format(a[m]))
-                    compare = np.allclose(a[m], coord, rtol, atol)
+                    print("second_array{}".format(second_array))
+                    compare = np.allclose(a[m], second_array, rtol, atol)
                     print(compare)
                     if compare == True:
                         true_count = 0
@@ -317,18 +342,25 @@ def main(_argv):
                             except:
                                 true_list.append(true_count)
 
-                        if true_list[m] > 100:
-                            vehicle_name=sorted_dict[k][0]
-                            trackid = int(k)
-                            box0 = sorted_dict[k][1][0]
-                            box1 = sorted_dict[k][1][1]
-
+                        if true_list[m] >(fps*30):
                             print("Track_id {} is stopped".format(int(k)))
                             cv2.putText(frame, vehicle_name + "  is stopped " , (int(box0), int(box1 - 30)), 0, 0.75, (255, 255, 255), 2)
                     print("true_list{}".format(true_list))
-
-
-
+                    if FLAGS.one_way_traffic:
+                            if frame_num%20==0:
+                                  if changed_width>first_width or changed_height > first_height and true_list[m]>=frame_num :
+                                      pass
+                                  elif  changed_width>first_width or changed_height > first_height:
+                                         print("The vehicle corresponding to the track_id is driving on the wrong way")
+                                         Negative_route_id.append(int(k))
+                                         if true_list[m]>60:
+                                             Negative_route_id.remove(int(k))
+                                         print("neg list{}".format(Negative_route_id))
+                    for i in range(len(Negative_route_id)):
+                        print("Track_id{} is violated".format(Negative_route_id[i]))
+                        cv2.putText(frame, vehicle_name + "  is driving on the wrong way ",
+                                    (int(box0), int(box1 - 40)), 0, 0.75,
+                                    (255, 255, 255), 2)
         except:
             print("No object is tracked till now")
         # calculate frames per second of running detections
@@ -351,7 +383,3 @@ if __name__ == '__main__':
         app.run(main)
     except SystemExit:
         pass
-
-
-
-
