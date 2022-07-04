@@ -3,7 +3,7 @@
 #This is applicable for short duration videos as the given tolerance range is not suitable for long duration videos.
 #Future scope: This method will be suitable for long duration videos if the tolerance range can change automatically.
                # More traffic violation can be detected using a a single system.
-               # The involvement of centroid valuefor detecting one way traffic violation will make the system effective.
+               # The involvement of centroid value for detecting one way traffic violation will make the system effective.
 import os
 # comment out below line to enable tensorflow logging outputs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
